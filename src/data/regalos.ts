@@ -16,6 +16,8 @@ export type Regalo = {
   nota?: string;
   /** Color de la caja (opcional, si no se pone se asigna solo) */
   color?: ColorCaja;
+  /** El más deseado: su caja es diminuta sin importar el precio, para despistar (opcional) */
+  imposible?: boolean;
 };
 
 export const regalos: Regalo[] = [
@@ -65,6 +67,6 @@ export const regalos: Regalo[] = [
     link: 'https://ortizo.com.co/collections/guitarras-electricas-fender/products/guitarra-electrica-fender-telecaster-squier-debutrojo-dakota',
     precio: 800_000,
     imagen: 'https://ortizo.com.co/cdn/shop/files/01_6d3821f0-ae43-46a0-968c-89ce08b5496a.jpg?v=1774018151',
-    nota: 'El regalo imposible',
+    imposible: true,
   },
 ];

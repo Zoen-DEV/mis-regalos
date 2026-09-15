@@ -34,6 +34,13 @@ export const FACTOR_TAMANO: Record<Tamano, number> = {
   gigante: 2.36,
 };
 
+/** El regalo imposible es el más caro, pero su caja es la más chica con diferencia */
+export const FACTOR_IMPOSIBLE = 0.5;
+
+export function factorDeRegalo(regalo: { precio: number; imposible?: boolean }): number {
+  return regalo.imposible ? FACTOR_IMPOSIBLE : FACTOR_TAMANO[tamanoPorPrecio(regalo.precio)];
+}
+
 export const TAMANOS: Record<Tamano, { nombre: string; rango: string }> = {
   chiquito: {
     nombre: 'Detallito',

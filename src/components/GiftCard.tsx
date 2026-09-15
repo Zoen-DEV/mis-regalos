@@ -29,7 +29,7 @@ export default function GiftCard({ regalo, color, tamano, tituloId, onCerrar }: 
       </div>
 
       <div className="tarjeta-cuerpo">
-        <span className="tarjeta-badge">{TAMANOS[tamano].nombre}</span>
+        <span className="tarjeta-badge">{regalo.imposible ? '¡Regalo imposible!' : TAMANOS[tamano].nombre}</span>
         <h2 id={tituloId}>{regalo.nombre}</h2>
         {regalo.nota && <p className="tarjeta-nota">{regalo.nota}</p>}
         <p className="tarjeta-precio">

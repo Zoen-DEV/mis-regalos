@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as E
 import type { Regalo } from '../data/regalos';
 import { colorPorIndice } from '../lib/colores';
 import { crearCuerpos, limitar, medirBase, Simulacion, type Cuerpo } from '../lib/fisica';
-import { FACTOR_TAMANO, tamanoPorPrecio } from '../lib/precio';
+import { factorDeRegalo, tamanoPorPrecio } from '../lib/precio';
 import GiftBox, { type Patron } from './GiftBox';
 import GiftCard from './GiftCard';
 
@@ -77,7 +77,7 @@ export default function GiftGrid({ regalos }: Props) {
     return {
       regalo,
       tamano,
-      factor: FACTOR_TAMANO[tamano],
+      factor: factorDeRegalo(regalo),
       color: regalo.color ?? colorPorIndice(i),
       patron: PATRONES[i % PATRONES.length],
     };
@@ -94,7 +94,7 @@ export default function GiftGrid({ regalos }: Props) {
     const campo = campoRef.current;
     if (!campo || regalos.length === 0) return;
 
-    const factores = regalos.map((r) => FACTOR_TAMANO[tamanoPorPrecio(r.precio)]);
+    const factores = regalos.map(factorDeRegalo);
     const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     sim.sinMovimiento = sinMovimiento.matches;

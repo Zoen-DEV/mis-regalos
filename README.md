@@ -16,6 +16,7 @@ Todo se edita en [`src/data/regalos.ts`](src/data/regalos.ts):
   imagen: 'https://…',      // opcional
   nota: 'Negros o blancos', // opcional
   color: 'morado',          // opcional: rojo | turquesa | amarillo | morado | verde | rosa | azul
+  imposible: true,          // opcional: caja diminuta aunque sea el más caro
 }
 ```
 
