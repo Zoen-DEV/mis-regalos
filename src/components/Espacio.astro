@@ -1,0 +1,329 @@
+---
+// Fondo de espacio profundo: nebulosas en CSS, estrellas y estrellas fugaces en un canvas.
+// Es un script propio (sin React) para que el cielo aparezca antes de que carguen los regalos.
+---
+
+<div class="espacio" aria-hidden="true">
+  <div class="nebulosa"></div>
+  <canvas class="estrellas"></canvas>
+</div>
+
+<style>
+  .espacio {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    background: radial-gradient(ellipse 120% 90% at 50% 40%, #13103a 0%, #0a0822 45%, #030209 100%);
+  }
+
+  .nebulosa,
+  .nebulosa::before,
+  .nebulosa::after {
+    position: absolute;
+    inset: -25%;
+  }
+
+  /* Vía láctea: una franja diagonal muy tenue */
+  .nebulosa {
+    background: linear-gradient(
+      155deg,
+      transparent 36%,
+      rgb(150 140 255 / 0.05) 45%,
+      rgb(255 225 245 / 0.07) 50%,
+      rgb(120 200 255 / 0.05) 55%,
+      transparent 64%
+    );
+    animation: deriva 140s ease-in-out infinite alternate;
+  }
+
+  .nebulosa::before {
+    content: '';
+    background:
+      radial-gradient(38% 30% at 30% 34%, rgb(132 90 255 / 0.2), transparent),
+      radial-gradient(30% 24% at 70% 66%, rgb(255 95 175 / 0.11), transparent);
+    animation: respira 40s ease-in-out infinite alternate;
+  }
+
+  .nebulosa::after {
+    content: '';
+    background:
+      radial-gradient(28% 22% at 66% 28%, rgb(60 207 192 / 0.09), transparent),
+      radial-gradient(34% 26% at 24% 76%, rgb(90 184 255 / 0.09), transparent);
+    animation: respira 55s ease-in-out -20s infinite alternate-reverse;
+  }
+
+  .estrellas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  @keyframes deriva {
+    from {
+      transform: translate3d(-2%, 1%, 0);
+    }
+    to {
+      transform: translate3d(2%, -1%, 0);
+    }
+  }
+
+  @keyframes respira {
+    from {
+      opacity: 0.65;
+      transform: scale(1) translate3d(0, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1.12) translate3d(2%, -2%, 0);
+    }
+  }
+</style>
+
+<script>
+  type Estrella = {
+    x: number;
+    y: number;
+    r: number;
+    brillo: number;
+    fase: number;
+    /** Velocidad del titileo (rad/s) */
+    titileo: number;
+    /** 0 = muy lejana, 1 = cercana */
+    profundidad: number;
+    color: string;
+    /** Las más brillantes se dibujan con halo */
+    halo: boolean;
+  };
+
+  type Fugaz = {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    largo: number;
+    grosor: number;
+    brillo: number;
+    edad: number;
+    duracion: number;
+  };
+
+  /** Estrellas por px² de pantalla */
+  const DENSIDAD = 1 / 2000;
+  const COLORES = ['#ffffff', '#ffffff', '#d4e3ff', '#ffe9d1', '#e4d6ff'];
+  /** Deriva de las estrellas más cercanas (px/s); las lejanas se mueven mucho menos */
+  const DERIVA_X = -5;
+  const DERIVA_Y = 1.5;
+
+  function aleatorio(min: number, max: number) {
+    return min + Math.random() * (max - min);
+  }
+
+  function envolver(valor: number, maximo: number) {
+    return maximo > 0 ? ((valor % maximo) + maximo) % maximo : 0;
+  }
+
+  /** Sprite de brillo suave con destellos en cruz, se dibuja una sola vez */
+  function crearHalo() {
+    const tam = 64;
+    const sprite = document.createElement('canvas');
+    sprite.width = tam;
+    sprite.height = tam;
+    const c = sprite.getContext('2d');
+    if (!c) return sprite;
+    const centro = tam / 2;
+
+    const brillo = c.createRadialGradient(centro, centro, 0, centro, centro, centro);
+    brillo.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    brillo.addColorStop(0.12, 'rgba(255, 255, 255, 0.85)');
+    brillo.addColorStop(0.3, 'rgba(190, 205, 255, 0.25)');
+    brillo.addColorStop(1, 'rgba(160, 180, 255, 0)');
+    c.fillStyle = brillo;
+    c.fillRect(0, 0, tam, tam);
+
+    for (const [ancho, alto] of [
+      [tam, 1.2],
+      [1.2, tam],
+    ]) {
+      const rayo = c.createRadialGradient(centro, centro, 0, centro, centro, centro);
+      rayo.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+      rayo.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      c.fillStyle = rayo;
+      c.fillRect(centro - ancho / 2, centro - alto / 2, ancho, alto);
+    }
+    return sprite;
+  }
+
+  function iniciar(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+    const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const halo = crearHalo();
+    let ancho = 0;
+    let alto = 0;
+    let estrellas: Estrella[] = [];
+    let fugaces: Fugaz[] = [];
+    let reloj = 0;
+    let proximaFugaz = aleatorio(2, 5);
+    let raf = 0;
+    let anterior = 0;
+
+    function crearEstrella(): Estrella {
+      // La mayoría son lejanas: chicas y tenues
+      const profundidad = Math.random() ** 2.2;
+      return {
+        x: Math.random() * ancho,
+        y: Math.random() * alto,
+        r: 0.3 + profundidad * 1.3,
+        brillo: aleatorio(0.3, 0.6) + profundidad * 0.45,
+        fase: Math.random() * Math.PI * 2,
+        titileo: aleatorio(0.3, 1.8),
+        profundidad,
+        color: COLORES[Math.floor(Math.random() * COLORES.length)],
+        halo: profundidad > 0.82 && Math.random() < 0.35,
+      };
+    }
+
+    function crearFugaz(): Fugaz {
+      // Lejanas: finas, cortas y tenues, cruzando en diagonal hacia abajo
+      const escala = Math.min(Math.max(Math.min(ancho, alto) / 800, 0.5), 1.2);
+      const sentido = Math.random() < 0.5 ? -1 : 1;
+      const angulo = (aleatorio(15, 38) * Math.PI) / 180;
+      const velocidad = aleatorio(380, 720) * escala;
+      return {
+        x: aleatorio(ancho * 0.1, ancho * 0.9),
+        y: aleatorio(0, alto * 0.55),
+        vx: Math.cos(angulo) * velocidad * sentido,
+        vy: Math.sin(angulo) * velocidad,
+        largo: aleatorio(70, 150) * escala,
+        grosor: aleatorio(0.7, 1.3),
+        brillo: aleatorio(0.55, 0.9),
+        edad: 0,
+        duracion: aleatorio(0.55, 1),
+      };
+    }
+
+    function medir() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      ancho = canvas.clientWidth;
+      alto = canvas.clientHeight;
+      canvas.width = Math.round(ancho * dpr);
+      canvas.height = Math.round(alto * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // Al cambiar de tamaño se conservan las estrellas y solo se agregan o quitan las que falten
+      for (const e of estrellas) {
+        e.x = envolver(e.x, ancho);
+        e.y = envolver(e.y, alto);
+      }
+      const cantidad = Math.round(ancho * alto * DENSIDAD);
+      while (estrellas.length < cantidad) estrellas.push(crearEstrella());
+      estrellas.length = Math.min(estrellas.length, cantidad);
+      dibujar();
+    }
+
+    function actualizar(dt: number) {
+      reloj += dt;
+
+      for (const e of estrellas) {
+        // Paralaje: las cercanas derivan más rápido que las lejanas
+        const factor = 0.15 + e.profundidad;
+        e.x = envolver(e.x + DERIVA_X * factor * dt, ancho);
+        e.y = envolver(e.y + DERIVA_Y * factor * dt, alto);
+      }
+
+      proximaFugaz -= dt;
+      if (proximaFugaz <= 0) {
+        fugaces.push(crearFugaz());
+        // De vez en cuando llega otra casi enseguida
+        proximaFugaz = Math.random() < 0.15 ? aleatorio(0.3, 1.2) : aleatorio(4, 11);
+      }
+
+      for (const f of fugaces) {
+        f.edad += dt;
+        f.x += f.vx * dt;
+        f.y += f.vy * dt;
+      }
+      fugaces = fugaces.filter((f) => f.edad < f.duracion);
+    }
+
+    function dibujar() {
+      ctx.clearRect(0, 0, ancho, alto);
+      const quieto = sinMovimiento.matches;
+
+      for (const e of estrellas) {
+        const titileo = quieto ? 1 : 0.6 + 0.4 * Math.sin(reloj * e.titileo + e.fase);
+        ctx.globalAlpha = Math.min(1, e.brillo * titileo);
+        if (e.halo) {
+          const tam = e.r * 9;
+          ctx.drawImage(halo, e.x - tam / 2, e.y - tam / 2, tam, tam);
+        } else if (e.r > 0.9) {
+          ctx.fillStyle = e.color;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = e.color;
+          ctx.fillRect(e.x - e.r, e.y - e.r, e.r * 2, e.r * 2);
+        }
+      }
+
+      ctx.lineCap = 'round';
+      for (const f of fugaces) {
+        // Aparece y se apaga suave
+        const alfa = f.brillo * Math.sin(Math.PI * (f.edad / f.duracion));
+        const rapidez = Math.hypot(f.vx, f.vy);
+        const cola = Math.min(f.largo, rapidez * f.edad);
+        const colaX = f.x - (f.vx / rapidez) * cola;
+        const colaY = f.y - (f.vy / rapidez) * cola;
+
+        const estela = ctx.createLinearGradient(f.x, f.y, colaX, colaY);
+        estela.addColorStop(0, `rgba(255, 255, 255, ${alfa})`);
+        estela.addColorStop(0.3, `rgba(205, 218, 255, ${alfa * 0.45})`);
+        estela.addColorStop(1, 'rgba(160, 180, 255, 0)');
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = estela;
+        ctx.lineWidth = f.grosor;
+        ctx.beginPath();
+        ctx.moveTo(colaX, colaY);
+        ctx.lineTo(f.x, f.y);
+        ctx.stroke();
+
+        ctx.globalAlpha = alfa;
+        const tam = 9 * f.grosor;
+        ctx.drawImage(halo, f.x - tam / 2, f.y - tam / 2, tam, tam);
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    function cuadro(ahora: number) {
+      // Al volver de otra pestaña dt puede ser enorme: se limita para que no llueva de golpe
+      const dt = anterior ? Math.min((ahora - anterior) / 1000, 0.1) : 0;
+      anterior = ahora;
+      actualizar(dt);
+      dibujar();
+      raf = requestAnimationFrame(cuadro);
+    }
+
+    function arrancar() {
+      cancelAnimationFrame(raf);
+      anterior = 0;
+      if (sinMovimiento.matches) {
+        // Movimiento reducido: cielo quieto, sin titileo ni estrellas fugaces
+        fugaces = [];
+        dibujar();
+      } else {
+        raf = requestAnimationFrame(cuadro);
+      }
+    }
+
+    new ResizeObserver(medir).observe(canvas);
+    sinMovimiento.addEventListener('change', arrancar);
+    arrancar();
+  }
+
+  const canvas = document.querySelector<HTMLCanvasElement>('.estrellas');
+  const ctx = canvas?.getContext('2d');
+  if (canvas && ctx) iniciar(canvas, ctx);
+</script>
