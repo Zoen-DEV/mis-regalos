@@ -69,4 +69,19 @@ export const regalos: Regalo[] = [
     imagen: 'https://ortizo.com.co/cdn/shop/files/01_6d3821f0-ae43-46a0-968c-89ce08b5496a.jpg?v=1774018151',
     imposible: true,
   },
+  {
+    nombre: 'Amplificador para guitarra',
+    link: 'https://tiendadelmusico.com/amplificadores-para-guitarra-electrica/311-vox-pathfinder-pf10-amplificador-para-guitarra-electrica-4959112022423.html',
+    precio: 500_000,
+  },
+  {
+    nombre: 'Libro El Silmarillion',
+    link: 'https://www.panamericana.com.co/el-silmarillion-394461/p',
+    precio: 55_000,
+  },
+  {
+    nombre: 'Libro El Hobbit',
+    link: 'https://www.panamericana.com.co/el-hobbit-683368/p',
+    precio: 49_000,
+  },
 ];
