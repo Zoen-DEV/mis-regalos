@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { PALETA, type ColorCaja } from '../lib/colores';
+import { PALETA, TINTA, type ColorCaja } from '../lib/colores';
 
 export type Patron = 'liso' | 'lunares' | 'rayas';
 
@@ -8,8 +8,6 @@ type Props = {
   patron?: Patron;
   abierta?: boolean;
 };
-
-const TINTA = '#2B2140';
 
 export default function GiftBox({ color, patron = 'liso', abierta = false }: Props) {
   const tonos = PALETA[color];

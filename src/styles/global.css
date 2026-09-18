@@ -131,6 +131,107 @@ body {
   transform: translate(-4px, -24px) rotate(-22deg);
 }
 
+/* ---------- Estantería (los regalos reservados) ---------- */
+
+.estanteria {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* La posición la pone GiftGrid.tsx y la madera la dibuja TablaEstante.tsx */
+.estante {
+  position: absolute;
+  left: 0;
+}
+
+.estante-svg {
+  display: block;
+  overflow: visible;
+  /* Sombra hacia abajo y el mismo brillo tenue que las cajas, para despegarla del cielo */
+  filter: drop-shadow(0 6px 5px rgb(0 0 0 / 0.4)) drop-shadow(0 0 12px rgb(200 185 255 / 0.22));
+  transition: filter 0.2s ease;
+}
+
+/* Se está arrastrando un regalo encima: el estante brilla para avisar que lo puede recibir */
+.estante.destino .estante-svg {
+  filter: drop-shadow(0 6px 5px rgb(0 0 0 / 0.4)) drop-shadow(0 0 10px rgb(255 214 120 / 0.95))
+    drop-shadow(0 0 22px rgb(255 190 90 / 0.5));
+}
+
+/* ---------- Manivela (pliega y extiende la estantería) ---------- */
+
+/* La posición sale de MANIVELA en lib/estantes.ts; el giro lo anima Manivela.tsx */
+.manivela {
+  position: fixed;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.manivela-cadena {
+  position: absolute;
+  left: 0;
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / 0.45));
+}
+
+.manivela-btn {
+  position: absolute;
+  top: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.manivela-rueda {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 4px 4px rgb(0 0 0 / 0.45)) drop-shadow(0 0 12px rgb(200 185 255 / 0.3));
+  transition: transform 0.15s ease;
+}
+
+.manivela-btn:hover .manivela-rueda {
+  transform: scale(1.06);
+}
+
+.manivela-btn:active .manivela-rueda {
+  transform: scale(0.95);
+}
+
+.manivela-btn:focus-visible {
+  outline: 3px dashed #f1ecff;
+  outline-offset: 4px;
+}
+
+/* ---------- Cuenta regresiva ---------- */
+
+.cuenta {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  padding: 6px 14px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  color: #f1ecff;
+  background: rgb(19 16 58 / 0.6);
+  border: 2px solid rgb(200 185 255 / 0.35);
+  border-radius: 999px;
+  text-shadow: 0 0 10px rgb(200 185 255 / 0.6);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  user-select: none;
+}
+
 .vacio {
   margin: 0;
   padding: 48px 16px;

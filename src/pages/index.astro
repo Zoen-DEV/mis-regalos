@@ -5,6 +5,7 @@ import '@fontsource/fredoka/600.css';
 import '@fontsource/fredoka/700.css';
 import '../styles/global.css';
 
+import CuentaRegresiva from '../components/CuentaRegresiva.astro';
 import Espacio from '../components/Espacio.astro';
 import GiftGrid from '../components/GiftGrid';
 import { config, regalos } from '../data/regalos';
@@ -29,5 +30,6 @@ import { config, regalos } from '../data/regalos';
       <h1 class="sr-only">{config.titulo}</h1>
       <GiftGrid client:only="react" regalos={regalos} />
     </main>
+    <CuentaRegresiva />
   </body>
 </html>

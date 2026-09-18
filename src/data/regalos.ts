@@ -3,6 +3,8 @@ import type { ColorCaja } from '../lib/colores';
 export const config = {
   titulo: '¡Mi lista de regalos!',
   subtitulo: 'Cosas que me harían muy feliz. Mientras más grande la caja, más cuesta el regalo.',
+  /** Fin de la cuenta regresiva, en la hora local de quien visita la página */
+  fecha: '2026-10-24T00:00:00',
 };
 
 export type Regalo = {

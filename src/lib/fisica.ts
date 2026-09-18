@@ -9,6 +9,10 @@ export type Cuerpo = {
   giro: number;
   /** Radio del círculo de choque (la mitad del ancho de la caja) */
   r: number;
+  /** Radio de la caja flotando: el tamaño con el que se dibuja sin achicar */
+  rLibre: number;
+  /** Radio al que tiende: en un estante la caja se achica para caber */
+  rObjetivo: number;
   /** Velocidad a la que tiende a flotar (px/s) */
   crucero: number;
   /** Giro al que tiende (grados/s) */
@@ -17,7 +21,11 @@ export type Cuerpo = {
   quieto: boolean;
   /** Su posición la controla el puntero */
   arrastrado: boolean;
+  /** Lugar en un estante: la caja va hacia ahí y se queda fija (null = flota libre) */
+  ancla: { x: number; y: number } | null;
 };
+
+export type Rect = { x0: number; y0: number; x1: number; y1: number };
 
 const PASO = 1 / 120;
 const MAX_PASOS = 8;
@@ -48,7 +56,7 @@ function suavizado(tasa: number, dt: number) {
 }
 
 function masaInversa(c: Cuerpo) {
-  return c.quieto || c.arrastrado ? 0 : 1 / (c.r * c.r);
+  return c.quieto || c.arrastrado || c.ancla ? 0 : 1 / (c.r * c.r);
 }
 
 /** Ancho (px) de la caja más chica, para que todas quepan con espacio de sobra para flotar */
@@ -76,6 +84,7 @@ export function crearCuerpos(
     const giroCrucero = ((Math.random() < 0.5 ? -1 : 1) * aleatorio(12, 36)) / Math.sqrt(f);
     const direccion = Math.random() * Math.PI * 2;
     const rapidez = sinMovimiento ? 0 : crucero;
+    const r = (f * base) / 2;
     return {
       x: 0,
       y: 0,
@@ -83,11 +92,14 @@ export function crearCuerpos(
       vy: Math.sin(direccion) * rapidez,
       angulo: sinMovimiento ? 0 : aleatorio(-180, 180),
       giro: sinMovimiento ? 0 : giroCrucero,
-      r: (f * base) / 2,
+      r,
+      rLibre: r,
+      rObjetivo: r,
       crucero,
       giroCrucero,
       quieto: false,
       arrastrado: false,
+      ancla: null,
     };
   });
 
@@ -107,6 +119,8 @@ export function crearCuerpos(
 
 export class Simulacion {
   cuerpos: Cuerpo[] = [];
+  /** Paredes fijas (las tablas de los estantes) contra las que rebotan las cajas libres */
+  obstaculos: Rect[] = [];
   ancho = 0;
   alto = 0;
   sinMovimiento = false;
@@ -128,10 +142,26 @@ export class Simulacion {
   private paso(dt: number) {
     for (const c of this.cuerpos) this.mover(c, dt);
     this.chocar();
-    for (const c of this.cuerpos) this.contener(c);
+    for (const c of this.cuerpos) {
+      this.esquivar(c);
+      this.contener(c);
+    }
   }
 
   private mover(c: Cuerpo, dt: number) {
+    c.r += (c.rObjetivo - c.r) * suavizado(10, dt);
+
+    if (c.ancla && !c.arrastrado) {
+      const acercar = suavizado(12, dt);
+      c.x += (c.ancla.x - c.x) * acercar;
+      c.y += (c.ancla.y - c.y) * acercar;
+      c.vx = 0;
+      c.vy = 0;
+      c.angulo = normalizarAngulo(c.angulo - c.angulo * suavizado(10, dt));
+      c.giro = 0;
+      return;
+    }
+
     if (c.arrastrado) {
       // Se inclina un poco hacia donde lo lleva el puntero
       const inclinacion = limitar(c.vx * 0.02, -20, 20);
@@ -224,7 +254,52 @@ export class Simulacion {
     }
   }
 
+  /** Choque contra las tablas: círculo contra rectángulo */
+  private esquivar(c: Cuerpo) {
+    if (c.arrastrado || c.ancla) return;
+    for (const o of this.obstaculos) {
+      const dx = c.x - limitar(c.x, o.x0, o.x1);
+      const dy = c.y - limitar(c.y, o.y0, o.y1);
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= c.r * c.r) continue;
+
+      let nx: number;
+      let ny: number;
+      let hundido: number;
+      if (d2 > 0.0001) {
+        const dist = Math.sqrt(d2);
+        nx = dx / dist;
+        ny = dy / dist;
+        hundido = c.r - dist;
+      } else {
+        // El centro quedó dentro de la tabla: sale por el borde más cercano
+        const bordes = [
+          { d: c.x - o.x0, nx: -1, ny: 0 },
+          { d: o.x1 - c.x, nx: 1, ny: 0 },
+          { d: c.y - o.y0, nx: 0, ny: -1 },
+          { d: o.y1 - c.y, nx: 0, ny: 1 },
+        ];
+        const borde = bordes.reduce((a, b) => (b.d < a.d ? b : a));
+        nx = borde.nx;
+        ny = borde.ny;
+        hundido = borde.d + c.r;
+      }
+
+      const separacion = Math.min(hundido, SEPARACION_MAX);
+      c.x += nx * separacion;
+      c.y += ny * separacion;
+
+      const normal = c.vx * nx + c.vy * ny;
+      if (normal < 0) {
+        const rebote = c.quieto ? 1 : 1 + REBOTE_PARED;
+        c.vx -= rebote * normal * nx;
+        c.vy -= rebote * normal * ny;
+      }
+    }
+  }
+
   private contener(c: Cuerpo) {
+    if (c.ancla && !c.arrastrado) return;
     const maxX = Math.max(c.r, this.ancho - c.r);
     const maxY = Math.max(c.r, this.alto - c.r);
     const rebotar = (v: number) => (c.arrastrado ? v : c.quieto ? 0 : -v * REBOTE_PARED);

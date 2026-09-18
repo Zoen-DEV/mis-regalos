@@ -1,10 +1,27 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as EventoPuntero } from 'react';
 import type { Regalo } from '../data/regalos';
 import { colorPorIndice } from '../lib/colores';
+import {
+  acomodar,
+  cargarEstantes,
+  cargarPlegado,
+  curvaPliegue,
+  DURACION_PLIEGUE,
+  estanteEn,
+  guardarEstantes,
+  guardarPlegado,
+  medirEstantes,
+  obstaculos,
+  posicionEn,
+  recorridoPliegue,
+  type Estante,
+} from '../lib/estantes';
 import { crearCuerpos, limitar, medirBase, Simulacion, type Cuerpo } from '../lib/fisica';
 import { factorDeRegalo, tamanoPorPrecio } from '../lib/precio';
 import GiftBox, { type Patron } from './GiftBox';
 import GiftCard from './GiftCard';
+import Manivela from './Manivela';
+import TablaEstante from './TablaEstante';
 
 const PATRONES: Patron[] = ['liso', 'lunares', 'liso', 'rayas', 'liso', 'lunares'];
 const ESPERA_TAPA_MS = 380;
@@ -24,6 +41,14 @@ type Props = {
 
 type Muestra = { t: number; x: number; y: number };
 
+/** Viaje de la estantería: 0 = extendida, 1 = plegada contra la pared */
+type Pliegue = { desde: number; hasta: number; inicio: number; duracion: number };
+
+function fraccionPlegada(p: Pliegue, ahora: number) {
+  const t = p.duracion > 0 ? limitar((ahora - p.inicio) / p.duracion, 0, 1) : 1;
+  return p.desde + (p.hasta - p.desde) * curvaPliegue(t);
+}
+
 type Arrastre = {
   indice: number;
   puntero: number;
@@ -36,7 +61,11 @@ type Arrastre = {
 };
 
 function pintar(nodo: HTMLElement, c: Cuerpo) {
-  nodo.style.transform = `translate3d(${c.x - c.r}px, ${c.y - c.r * 2 * CENTRO_Y}px, 0) rotate(${c.angulo}deg)`;
+  // El nodo mide siempre el tamaño libre; en los estantes se achica con scale desde su centro
+  const escala = c.r / c.rLibre;
+  nodo.style.transform =
+    `translate3d(${c.x - c.rLibre}px, ${c.y - c.rLibre * 2 * CENTRO_Y}px, 0) ` +
+    `rotate(${c.angulo}deg) scale(${escala})`;
   nodo.classList.toggle('arriba', c.quieto || c.arrastrado);
   nodo.classList.toggle('arrastrando', c.arrastrado);
   // La animación del hover arranca cuando la caja ya se enderezó
@@ -59,6 +88,8 @@ export default function GiftGrid({ regalos }: Props) {
   const [tapaAbierta, setTapaAbierta] = useState<number | null>(null);
   const [seleccion, setSeleccion] = useState<number | null>(null);
   const [base, setBase] = useState<number | null>(null);
+  const [estantes, setEstantes] = useState<Estante[]>([]);
+  const [plegado, setPlegado] = useState(cargarPlegado);
   const [sim] = useState(() => new Simulacion());
   const dialogRef = useRef<HTMLDialogElement>(null);
   const campoRef = useRef<HTMLUListElement>(null);
@@ -71,6 +102,13 @@ export default function GiftGrid({ regalos }: Props) {
   const arrastreRef = useRef<Arrastre | null>(null);
   const clickAnuladoRef = useRef(false);
   const ignorarHoverRef = useRef(new Set<number>());
+  // Qué regalos hay en cada estante, en orden de izquierda a derecha (índices de `regalos`)
+  const listasRef = useRef<number[][]>([]);
+  const estantesRef = useRef<Estante[]>([]);
+  const tablasRef = useRef<(HTMLDivElement | null)[]>([]);
+  const estanteriaRef = useRef<HTMLDivElement>(null);
+  const plegadoRef = useRef(plegado);
+  const pliegueRef = useRef<Pliegue>({ desde: plegado ? 1 : 0, hasta: plegado ? 1 : 0, inicio: 0, duracion: 0 });
 
   const items = regalos.map((regalo, i) => {
     const tamano = tamanoPorPrecio(regalo.precio);
@@ -95,10 +133,73 @@ export default function GiftGrid({ regalos }: Props) {
     if (!campo || regalos.length === 0) return;
 
     const factores = regalos.map(factorDeRegalo);
+    const links = regalos.map((r) => r.link);
     const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     sim.sinMovimiento = sinMovimiento.matches;
     sim.cuerpos = [];
+    listasRef.current = cargarEstantes(links);
+
+    let corrimientoAnterior = 0;
+
+    /**
+     * Calcula el lugar de cada caja en los estantes. Si se está arrastrando una caja sobre un estante,
+     * las demás le hacen lugar donde caería y ella se achica al tamaño que tendría ahí.
+     * También mueve la estantería mientras se pliega o se extiende.
+     */
+    function acomodarEstantes(ahora: number) {
+      const arrastre = arrastreRef.current;
+      const movido = arrastre?.moviendo ? arrastre.indice : null;
+      const geo = estantesRef.current;
+      const corrimiento = -recorridoPliegue(geo) * fraccionPlegada(pliegueRef.current, ahora);
+      const estanteria = estanteriaRef.current;
+      if (estanteria) estanteria.style.transform = corrimiento ? `translate3d(${corrimiento}px, 0, 0)` : '';
+      sim.obstaculos = obstaculos(geo, corrimiento);
+
+      // Solo se puede dejar un regalo con la estantería extendida del todo
+      const destino =
+        movido !== null && corrimiento === 0 ? estanteEn(geo, sim.cuerpos[movido].x, sim.cuerpos[movido].y) : null;
+
+      for (const c of sim.cuerpos) {
+        c.ancla = null;
+        c.rObjetivo = c.rLibre;
+      }
+
+      geo.forEach((estante, e) => {
+        const fila = (listasRef.current[e] ?? []).filter((i) => i !== movido);
+        const anchos = () => fila.map((i) => sim.cuerpos[i].rLibre * 2);
+        if (e === destino && movido !== null) {
+          fila.splice(posicionEn(acomodar(estante, anchos()), sim.cuerpos[movido].x), 0, movido);
+        }
+        acomodar(estante, anchos()).forEach((lugar, k) => {
+          const c = sim.cuerpos[fila[k]];
+          c.rObjetivo = lugar.r;
+          if (fila[k] !== movido) c.ancla = { x: lugar.x + corrimiento, y: lugar.y };
+        });
+      });
+
+      // Las cajas viajan pegadas a la estantería: si solo siguieran a su ancla quedarían atrás
+      const delta = corrimiento - corrimientoAnterior;
+      corrimientoAnterior = corrimiento;
+      if (delta !== 0) for (const c of sim.cuerpos) if (c.ancla && !c.arrastrado) c.x += delta;
+
+      tablasRef.current.forEach((nodo, e) => nodo?.classList.toggle('destino', e === destino));
+    }
+
+    /** Pone las cajas de los estantes directo en su lugar, sin animar */
+    function asentar() {
+      acomodarEstantes(performance.now());
+      for (const c of sim.cuerpos) {
+        if (!c.ancla) continue;
+        c.x = c.ancla.x;
+        c.y = c.ancla.y;
+        c.r = c.rObjetivo;
+        c.vx = 0;
+        c.vy = 0;
+        c.angulo = 0;
+        c.giro = 0;
+      }
+    }
 
     // Se mide con ResizeObserver: el CSS puede aplicarse después de montar y el campo mediría 0.
     // También cubre cambios de tamaño de la ventana y de la barra del navegador en el celular.
@@ -108,14 +209,19 @@ export default function GiftGrid({ regalos }: Props) {
       if (ancho === 0 || alto === 0) return;
       sim.ancho = ancho;
       sim.alto = alto;
+      const geo = medirEstantes(ancho, alto);
+      estantesRef.current = geo;
       const nuevaBase = medirBase(ancho, alto, factores);
       if (sim.cuerpos.length === 0) {
         sim.cuerpos = crearCuerpos(factores, nuevaBase, ancho, alto, sim.sinMovimiento);
       } else {
         sim.cuerpos.forEach((c, i) => {
-          c.r = (factores[i] * nuevaBase) / 2;
+          c.rLibre = (factores[i] * nuevaBase) / 2;
+          c.r = c.rLibre;
         });
       }
+      asentar();
+      setEstantes(geo);
       setBase(nuevaBase);
     });
     observador.observe(campo);
@@ -164,6 +270,7 @@ export default function GiftGrid({ regalos }: Props) {
     let anterior = performance.now();
     function cuadro(ahora: number) {
       actualizarInteraccion(ahora);
+      acomodarEstantes(ahora);
       sim.avanzar((ahora - anterior) / 1000);
       anterior = ahora;
       sim.cuerpos.forEach((c, i) => {
@@ -275,12 +382,48 @@ export default function GiftGrid({ regalos }: Props) {
     // Fue un arrastre: el click que viene después no debe abrir la caja
     clickAnuladoRef.current = true;
     const c = sim.cuerpos[arrastre.indice];
+
+    // Si cae sobre un estante queda reservado ahí; si no, vuelve a flotar
+    const listas = listasRef.current.map((fila) => fila.filter((i) => i !== arrastre.indice));
+    const geo = estantesRef.current;
+    const extendida = fraccionPlegada(pliegueRef.current, performance.now()) === 0;
+    const destino = extendida ? estanteEn(geo, c.x, c.y) : null;
+    if (destino !== null) {
+      const fila = listas[destino];
+      const lugares = acomodar(geo[destino], fila.map((i) => sim.cuerpos[i].rLibre * 2));
+      fila.splice(posicionEn(lugares, c.x), 0, arrastre.indice);
+    }
+    listasRef.current = listas;
+    guardarEstantes(listas, regalos.map((r) => r.link));
+
+    if (destino !== null) {
+      c.vx = 0;
+      c.vy = 0;
+      c.giro = 0;
+      return;
+    }
+
     const ultima = arrastre.muestras[arrastre.muestras.length - 1];
     const v = lanzar && e.timeStamp - ultima.t < 60 ? velocidad(arrastre.muestras) : { x: 0, y: 0 };
     c.vx = v.x;
     c.vy = v.y;
     c.giro = limitar(v.x * 0.15, -200, 200);
     if (Math.hypot(v.x, v.y) > LANZAMIENTO_MIN) ignorarHoverRef.current.add(arrastre.indice);
+  }
+
+  function alternarEstantes() {
+    const ahora = performance.now();
+    const nuevo = !plegadoRef.current;
+    const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    pliegueRef.current = {
+      desde: fraccionPlegada(pliegueRef.current, ahora),
+      hasta: nuevo ? 1 : 0,
+      inicio: ahora,
+      duracion: sinMovimiento ? 0 : DURACION_PLIEGUE,
+    };
+    plegadoRef.current = nuevo;
+    setPlegado(nuevo);
+    guardarPlegado(nuevo);
   }
 
   if (items.length === 0) {
@@ -291,6 +434,21 @@ export default function GiftGrid({ regalos }: Props) {
 
   return (
     <>
+      <div className="estanteria" ref={estanteriaRef} aria-hidden="true">
+        {estantes.map((estante, i) => (
+          <div
+            key={i}
+            ref={(nodo) => {
+              tablasRef.current[i] = nodo;
+            }}
+            className="estante"
+            style={{ top: `${estante.y}px` }}
+          >
+            <TablaEstante largo={estante.largo} variante={i} />
+          </div>
+        ))}
+      </div>
+
       <ul className="campo" ref={campoRef}>
         {base !== null &&
           items.map(({ regalo, factor, color, patron }, i) => (
@@ -333,6 +491,8 @@ export default function GiftGrid({ regalos }: Props) {
             </li>
           ))}
       </ul>
+
+      <Manivela plegado={plegado} onAlternar={alternarEstantes} />
 
       <dialog
         ref={dialogRef}

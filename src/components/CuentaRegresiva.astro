@@ -1,0 +1,35 @@
+---
+// Cuenta regresiva hasta la fecha de config, en formato DD:HH:MM:SS.
+// Es un script propio (sin React) para que aparezca junto con el cielo.
+import { config } from '../data/regalos';
+---
+
+<time class="cuenta" role="timer" datetime={config.fecha} data-fin={config.fecha}>--:--:--:--</time>
+
+<script>
+  const SEGUNDO = 1000;
+
+  function dosDigitos(n: number) {
+    return String(n).padStart(2, '0');
+  }
+
+  function iniciar(reloj: HTMLElement, fin: number) {
+    function actualizar() {
+      const restante = Math.max(0, Math.floor((fin - Date.now()) / SEGUNDO));
+      const dias = Math.floor(restante / 86400);
+      const horas = Math.floor(restante / 3600) % 24;
+      const minutos = Math.floor(restante / 60) % 60;
+      const segundos = restante % 60;
+      reloj.textContent = [dias, horas, minutos, segundos].map(dosDigitos).join(':');
+      reloj.setAttribute('aria-label', `Faltan ${dias} días, ${horas} horas, ${minutos} minutos y ${segundos} segundos`);
+      // Se alinea con el cambio de segundo para que no salte de a dos
+      if (restante > 0) setTimeout(actualizar, SEGUNDO - ((fin - Date.now()) % SEGUNDO) + 5);
+    }
+    actualizar();
+  }
+
+  const reloj = document.querySelector<HTMLElement>('.cuenta');
+  // Sin zona horaria, la fecha se interpreta en la hora local del navegador
+  const fin = new Date(reloj?.dataset.fin ?? '').getTime();
+  if (reloj && Number.isFinite(fin)) iniciar(reloj, fin);
+</script>

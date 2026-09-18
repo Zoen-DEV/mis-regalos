@@ -1,3 +1,6 @@
+/** Contorno de todos los dibujos (cajas y estantes) */
+export const TINTA = '#2B2140';
+
 export type ColorCaja = 'rojo' | 'turquesa' | 'amarillo' | 'morado' | 'verde' | 'rosa' | 'azul';
 
 type Tonos = {
