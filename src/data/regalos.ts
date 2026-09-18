@@ -24,16 +24,19 @@ export const regalos: Regalo[] = [
   {
     nombre: 'Puente para la guitarra',
     link: 'https://www.mercadolibre.com.co/telecaster-bridge-axegrinderz-wtb-brass-saddle-chrome/p/MCO2101350436',
+    imagen: '/regalos/puente-de-guitarra.png',
     precio: 250_000,
   },
   {
     nombre: 'Kit de herramientas para guitarra #1',
     link: 'https://www.mercadolibre.com.co/guitar-maintenance-tool-kit-universal-guitar-setup-tool-kits/p/MCO2026119387',
+    imagen: '/regalos/kit-de-herramientas-1.png',
     precio: 140_000,
   },
   {
     nombre: 'Kit de herramientas para guitarra #2',
     link: 'https://www.mercadolibre.com.co/herramienta-de-mantenimiento-para-la-reparacion-de-guitarras/p/MCO2058539765',
+    imagen: '/regalos/kit-de-herramientas-2.png',
     precio: 110_000,
   },
   {
@@ -72,16 +75,25 @@ export const regalos: Regalo[] = [
   {
     nombre: 'Amplificador para guitarra',
     link: 'https://tiendadelmusico.com/amplificadores-para-guitarra-electrica/311-vox-pathfinder-pf10-amplificador-para-guitarra-electrica-4959112022423.html',
+    imagen: '/regalos/amplificador.png',
     precio: 500_000,
   },
   {
     nombre: 'Libro El Silmarillion',
     link: 'https://www.panamericana.com.co/el-silmarillion-394461/p',
+    imagen: '/regalos/silmarillion.png',
     precio: 55_000,
   },
   {
     nombre: 'Libro El Hobbit',
     link: 'https://www.panamericana.com.co/el-hobbit-683368/p',
+    imagen: '/regalos/hobbit.png',
     precio: 49_000,
+  },
+  {
+    nombre: 'Florcitas',
+    link: 'https://api.whatsapp.com/send/?phone=%2B573124798849&text&type=phone_number&app_absent=0',
+    imagen: '/regalos/florcita.png',
+    precio: 8_000,
   },
 ];
